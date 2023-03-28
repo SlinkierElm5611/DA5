@@ -61,7 +61,8 @@ def gridSearch():
     lper = np.linspace(0.05,0.4, 5)
 
     sensitivity = {}
-
+    rel_sens = 0
+    last_freq = 0
     for length in Lbridge:
         for h in hper:
             for l in lper:
@@ -70,7 +71,12 @@ def gridSearch():
                     Lwindow = l*(length)
                     Wbridge = length/4
                     #sensevity[getsensevity(Lbridge, Wbridge, hbridge,Lwindow)] = [Lbridge, Wbridge, hbridge,Lwindow]
-                    sensitivity[getSensitivity(length,h,l)] = [length, h, l]
+                    freq = getSensitivity(length,h,l)
+                    if last_freq == 0:
+                        last_freq = freq
+                    else:
+                        rel_sens = ((last_freq - freq)/last_freq)*100 #Percent of change in relative frequency 
+                    sensitivity[rel_sens] = [length, h, l]
     max_sens = max(sensitivity.keys())
     return [sensitivity[max_sens], max_sens]
 def mat_thickness():
