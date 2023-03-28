@@ -140,9 +140,8 @@ end"""
 # Path Variables
 FlexFileName = "DA5" 
 FlexLocation = "FlexPDE6s"
-TextFile = 'DA5_summary.txt'
 FlexVersion = 6
-
+TextFile = (FlexVersion==7)*("DA5_output/")+'DA5_summary.txt'
 
 def getSensitivity(Lbridge, hpercent, lpercent):
     disp = 0
