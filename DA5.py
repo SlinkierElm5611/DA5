@@ -158,10 +158,17 @@ def getSensitivity(Lbridge, hpercent, lpercent):
         disp = float(text[-1].strip())
         return disp
       
-def grad(dimensions, delta):
-    dx = [delta, 0]
-    dy = [0,delta, 0]
-    dz = [0,0,delta]
+def grad(dim, delta):
+    dx = np.array([delta, 0, 0])
+    dy = np.array([0, delta, 0])
+    dz = np.array([0, 0, delta])
+    freq0 = getSensitivity(dim, False)
+    grad = np.array([
+        (getSensitivity(dim + dx, False) - freq0) / delta,
+        (getSensitivity(dim + dy, False) - freq0) / delta,
+        (getSensitivity(dim + dz, False) - freq0) / delta,
+    ])
+    return grad
     
 def gradientAscent(dimensions):
     #Similar to the gradient ascent algorithm but goes towards a maximum instead by moving towards a positive direction
@@ -209,14 +216,24 @@ def gridSearch():
                     sensitivity[rel_sens] = [length, h, l]
     max_sens = max(sensitivity.keys())
     return [sensitivity[max_sens], max_sens]
-def mat_thickness():
-    return
+def mat_thickness(dimensions, freq, properties):
+
+
+    return 
+
 def main():
     max_sens = []
 
+    #Initial sweep of all values in ranges with large step sizes
     max_sens = gridSearch()
 
-    next_max = []
-    next_max = gradientAscent(max_sens)
+    #Further scope into a zoomed in section of the maximum value
+    max_freq = 0
+    opt_dim = []
+    opt_dim, max_freq = gradientAscent(max_sens)
 
+    #Finding the longevity values for various material aka when it stops working
+    gold = mat_thickness(opt_dim, max_freq, ) #add material value
+    gold = mat_thickness(opt_dim, max_freq, ) #add material value
+    gold = mat_thickness(opt_dim, max_freq, ) #add material value
 main()
