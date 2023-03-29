@@ -230,12 +230,6 @@ def mat_thickness(dimensions, freq, properties):
     hpercent = dimensions[1]
     lpercent = dimensions[2]
     mat_th = dimensions[3]
-    for th in max_mat_thickness:
-        freq = getSensitivity([Lbridge, hpercent, lpercent, th])
-        if freq == 0:
-            break
-        mat_th = th
-    return mat_th
 
 def main():
     max_sens = []
