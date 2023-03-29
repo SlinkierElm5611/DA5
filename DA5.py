@@ -26,7 +26,7 @@ Lx = %s*(Ly)
 LxQz = Lx/(0.85+1) ! thickness
 LxTi = Lx-LxQz ! thickness h/(m+1) = a2
 LyAu = %s*Ly ! window length
-LxAu = 0 ! window thickness
+LxAu = %s ! window thickness
 Lz = Ly/4 ! width
 
 ! Material Properties
@@ -143,11 +143,15 @@ FlexLocation = "FlexPDE6s"
 FlexVersion = 6
 TextFile = (FlexVersion==7)*("DA5_output/")+'DA5_summary.txt'
 
-def getSensitivity(Lbridge, hpercent, lpercent):
-    disp = 0
+def getSensitivity(dimensions):
+    freq = 0
+    Lbridge = dimensions[0]
+    hpercent = dimensions[1]
+    lpercent = dimensions[2]
+    mat_th = dimensions[3]
     with open(FlexFileName + '.pde', 'w') as f: 
         #print(FlexCode %(Lbridge, Wbridge, hbridge,Lwindow), file = f)
-        print(FlexCode %(Lbridge, hpercent, lpercent), file = f)
+        print(FlexCode %(Lbridge, hpercent, lpercent, mat_th ), file = f)
     # Runs FlexPDE
     subprocess.run([FlexLocation, "-S",FlexFileName],timeout=5)
 
@@ -155,42 +159,43 @@ def getSensitivity(Lbridge, hpercent, lpercent):
     with open(TextFile) as f:
         text = f.readlines()[-1].strip().split(" ")
         #print(text[1])
-        disp = float(text[-1].strip())
-        return disp
+        freq = float(text[-1].strip())
+        return freq
       
 def grad(dim, delta):
     dx = np.array([delta, 0, 0])
     dy = np.array([0, delta, 0])
     dz = np.array([0, 0, delta])
-    freq0 = getSensitivity(dim, False)
+    freq0 = getSensitivity(dim)
     grad = np.array([
-        (getSensitivity(dim + dx, False) - freq0) / delta,
-        (getSensitivity(dim + dy, False) - freq0) / delta,
-        (getSensitivity(dim + dz, False) - freq0) / delta,
+        (getSensitivity(dim + dx) - freq0) / delta,
+        (getSensitivity(dim + dy) - freq0) / delta,
+        (getSensitivity(dim + dz) - freq0) / delta,
     ])
     return grad
     
-def gradientAscent(dimensions):
+def gradientAscent(dimensions, freqGuess):
     #Similar to the gradient ascent algorithm but goes towards a maximum instead by moving towards a positive direction
     delta = 0.00001 
-    Lbridge = dimensions[0][0] # initial guess
+    ''' Lbridge = dimensions[0][0] # initial guess
     hbridge = dimensions[0][1]*(Lbridge)
     Lwindow = dimensions[0][2]*(Lbridge)
     sensitivity = dimensions[1]
-    Wbridge = Lbridge/4
+    Wbridge = Lbridge/4'''
+    dim0 = np.array(dimensions)
+    Freq0 = freqGuess
     for i in range(20):
-        g = grad(dimensions, delta) 
-        thNext = th0 + delta*g
+        g = grad(dim0, delta) 
+        dimNext = dim0 + delta*g
         #print("Grad:", g) #debugging
-        print("The displacement is " + str(Disp0) + " at " + str(th0))
-        DispNext = getSensitivity(th0)
-        if (DispNext < Disp0):
+        print("The frequency is " + str(Freq0) + " at " + str(dim0))
+        freqNext = getSensitivity(dim0)
+        if (dimNext < dim0):
             print("Passed maximum.")
-            return th0, Disp0
+            return dim0, Freq0
         else:
-            th0, Disp0 = thNext, DispNext
-    
-    return th0, Disp0
+            dim0, Freq0 = dimNext, freqNext
+    return dim0, Freq0
 
 def gridSearch():
     Lbridge = np.linspace(5e-5,0.01,5)
@@ -200,6 +205,7 @@ def gridSearch():
     sensitivity = {}
     rel_sens = 0
     last_freq = 0
+    mat_th = 0 #Test value for now to find optimal dimensions
     for length in Lbridge:
         for h in hper:
             for l in lper:
@@ -208,18 +214,28 @@ def gridSearch():
                     Lwindow = l*(length)
                     Wbridge = length/4
                     #sensevity[getsensevity(Lbridge, Wbridge, hbridge,Lwindow)] = [Lbridge, Wbridge, hbridge,Lwindow]
-                    freq = getSensitivity(length,h,l)
+                    freq = getSensitivity([length,h,l, mat_th])
                     if last_freq == 0:
                         last_freq = freq
                     else:
                         rel_sens = ((last_freq - freq)/last_freq)*100 #Percent of change in relative frequency 
-                    sensitivity[rel_sens] = [length, h, l]
+                    sensitivity[rel_sens] = [length, h, l, mat_th]
+                    print("The frequency and dimensions are as follows"+ str(sensitivity))
     max_sens = max(sensitivity.keys())
     return [sensitivity[max_sens], max_sens]
+
 def mat_thickness(dimensions, freq, properties):
-
-
-    return 
+    max_mat_thickness = np.linspace(0, 2e-5, 20) #guess for max material change
+    Lbridge = dimensions[0]
+    hpercent = dimensions[1]
+    lpercent = dimensions[2]
+    mat_th = dimensions[3]
+    for th in max_mat_thickness:
+        freq = getSensitivity([Lbridge, hpercent, lpercent, th])
+        if freq == 0:
+            break
+        mat_th = th
+    return mat_th
 
 def main():
     max_sens = []
@@ -234,6 +250,7 @@ def main():
 
     #Finding the longevity values for various material aka when it stops working
     gold = mat_thickness(opt_dim, max_freq, ) #add material value
-    gold = mat_thickness(opt_dim, max_freq, ) #add material value
-    gold = mat_thickness(opt_dim, max_freq, ) #add material value
+    molybdenum = mat_thickness(opt_dim, max_freq, ) #add material value
+    chromium = mat_thickness(opt_dim, max_freq, ) #add material value
+    SiO2 =  mat_thickness(opt_dim, max_freq, ) #add material value
 main()
