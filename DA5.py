@@ -166,9 +166,9 @@ end
 """
 # Path Variables
 FlexFileName = "DA5" 
-FlexLocation = "FlexPDE6s"
-FlexVersion = 6
-TextFile = (FlexVersion==7)*("DA5_output/")+'DA5_summary_0.txt'
+FlexLocation = "/Applications/FlexPDE7/FlexPDE7.app/Contents/MacOS/FlexPDE7"
+FlexVersion = 7
+TextFile = (FlexVersion==7)*("DA5_output/")+'DA5_summary.txt'
 max_val = ""
 def getFrequency(dimensions):
     freq = 0
@@ -292,7 +292,22 @@ def gridSearch():
         sensitivity.pop(max_sens)
         max_sens = min(sensitivity.keys())
     print("The maximum sensitivity is "+ str(max_sens)+ "at" + str(sensitivity[max_sens]))
-    
+    sensitivities = sensitivity.keys()
+    lbridges = []
+    hpers = []
+    lpers = []
+    thicknesses = []
+    for sens in sensitivities:
+        lbridges.append(sensitivity[sens][0])
+        hpers.append(sensitivity[sens][1])
+        lpers.append(sensitivity[sens][2])
+        thicknesses.append(sensitivity[sens][3])
+    fig, axs = plt.subplots(2,2)
+    axs[0][0].scatter(lbridges, sensitivities)
+    axs[0][1].scatter(hpers, sensitivities)
+    axs[1][0].scatter(lpers, sensitivities)
+    axs[1][1].scatter(thicknesses, sensitivities)
+    plt.show()  
     return [sensitivity[max_sens], max_sens]
 
 def mat_thickness(dimensions, freq, properties):
