@@ -3,6 +3,7 @@ import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
+from scipy.optimize import differential_evolution
 FlexCode = """
 TITLE 
 'DA5'
@@ -23,18 +24,15 @@ DEFINITIONS
 mag=0.3*globalmax(magnitude(x,y))/globalmax(magnitude(u,v))
 
 ! Dimensions
-Ly = %s! length (0.5mm - 1 cm)
-LxTotal = %s*Ly ! total thickness 
-LyAu = %s*Ly ! window length 
-
-
+Ly = %s ! length (0.5mm - 1 cm)
 Lz = Ly/4 ! width
 
-m = 1.163451761 !0.8595113554
-{LxQz = LxTotal/(m+1) ! thickness of quartz
-LxTi = LxTotal - LxQz ! thickness of titanium}
-LxTi = LxTotal/(m+1) ! thickness of quartz
-LxQz = LxTotal - LxTi ! thickness of titanium
+LxTotal = %s*Ly ! total thickness 
+m = 1.163451761
+LxTi = LxTotal/(m+1) ! thickness of titanium
+LxQz = LxTotal - LxTi ! thickness of quartz
+
+LyAu = %s*Ly ! window length 
 LxAu = %s ! window thickness
 
 ! Material Properties
@@ -60,8 +58,6 @@ d31 = 45e-12            d32 = 0				d33 = 70e-12    d34 = 0 d35 = 0 d36 = 0
 { Electric field }
 voltage = 1e3
 Efieldx = -voltage/LxQz
-Efieldy = 0
-Efieldz = 0
 
 !! Strain
 !Axial Strain
@@ -70,19 +66,19 @@ ey=dy(v)
 !Engineering Shear Strain
 gxy=(dx(v)+dy(u))
 !Mechanical strain
-exm  = ex  - (d11*Efieldx+d21*Efieldy+d31*Efieldz)
-eym  = ey  - (d12*Efieldx+d22*Efieldy+d32*Efieldz)
-gxym = gxy - (d16*Efieldx+d26*Efieldy+d36*Efieldz)
+exm  = ex  - d11*Efieldx
+eym  = ey  - d12*Efieldx
+gxym = gxy - d16*Efieldx
 
 !!Stress via Hooke's law
 !Axial Stress
-sx = C11*ex+C12*ey+C16*gxy
-sy = C21*ex+C22*ey+C26*gxy
+sx = C11*exm+C12*eym+C16*gxym
+sy = C21*exm+C22*eym+C26*gxym
 
 !Shear stress
-sxy=C61*ex+C62*ey+C66*gxy
+sxy=C61*exm+C62*eym+C66*gxym
 
- f = sqrt(lambda)/2*pi
+ f = sqrt(lambda)/(2*pi)
 
 EQUATIONS
 !FNet = 0
@@ -94,6 +90,9 @@ BOUNDARIES
 	    rho = 4.506e3
 		E = 106e9
         nu = 0.34
+        d11 = 0           d12 = 0		d13 = 0    d14 = 0 d15 = 0 d16 = 0
+		d21 = 0           d22 = 0		d23 = 0    d24 = 0 d25 = 0 d26 = 0
+		d31 = 0           d32 = 0		d33 = 0	d34 = 0 d35 = 0 d36 = 0
     	START(0,0) !y=0 surface:
 		load(u)=0
 		value(v)=0
@@ -130,10 +129,14 @@ BOUNDARIES
 		load(v)=0
 		LINE TO CLOSE
         
-    REGION 3 'Gold'
+    REGION 3 'Deposit'
+    	! Gold
     	rho = 19.3e3
         E = 79e9
 		nu = 0.42
+        d11 = 0           d12 = 0		d13 = 0    d14 = 0 d15 = 0 d16 = 0
+		d21 = 0           d22 = 0		d23 = 0    d24 = 0 d25 = 0 d26 = 0
+		d31 = 0           d32 = 0		d33 = 0	d34 = 0 d35 = 0 d36 = 0
     	START(LxQz,0) !y=0 surface:
 		load(u)=0
 		value(v)=0 
@@ -151,12 +154,12 @@ BOUNDARIES
 
 PLOTS
 	grid(x+u*mag, y+v*mag)
- 	!contour(u) on surface z=0
-    elevation(u) from (LxTi+LxQz/2,-Ly/2) to (LxTi+LxQz/2, Ly/2)
+ 	!contour(u) painted
+    elevation(u) from (0,-Ly/2) to (0, Ly/2)
 	
 	SUMMARY
         export file 'DA5_summary.txt'
-		    report f
+		report f
 end
 """
 # Path Variables
@@ -165,7 +168,7 @@ FlexLocation = "FlexPDE6s"
 FlexVersion = 6
 TextFile = (FlexVersion==7)*("DA5_output/")+'DA5_summary_0.txt'
 last_freq = 0
-def getSensitivity(dimensions):
+def getFrequency(dimensions):
     freq = 0
     Lbridge = dimensions[0]
     hpercent = dimensions[1]
@@ -183,56 +186,74 @@ def getSensitivity(dimensions):
         #print(text[1])
         freq = float(text[-1].strip())
         return freq
-      
-def grad(dim, delta):
+    
+def grad(dim, delta, freq0):
     dx = np.array([delta, 0, 0,0])
     dy = np.array([0, delta, 0,0])
     dz = np.array([0, 0, delta,0])
     dmat = np.array([0, 0, 0,0])
     print(dim)
     
-    freq0 = getSensitivity(dim)
     #rel_sens = ((last_freq - freq0)/last_freq)*100
-    last_freq = freq0
+    last_freq = getFrequency(dim)
 
-    print(freq0)
-    
-    print(dim + dx)
-    print(dim + dy)
-    print(dim+ dz)
+    print(last_freq)
+    print(getFrequency(dim + dx))
     gradient = np.array([
-        (getSensitivity(dim + dx) - freq0) / delta,
-        (getSensitivity(dim + dy) - freq0) / delta,
-        (getSensitivity(dim + dz) - freq0) / delta,
-        (getSensitivity(dim + dmat)-freq0)/delta
+        (getFrequency(dim + dx) - last_freq) / delta,
+        (getFrequency(dim + dy) - last_freq) / delta,
+        (getFrequency(dim + dz) - last_freq) / delta,
+        (getFrequency(dim + dmat)-last_freq)/delta
     ])
     print(gradient)
     return gradient
     
-def gradientAscent(dimensions, freqGuess):
+def gradientDescent(dimensions, sensGuess):
     #Similar to the gradient ascent algorithm but goes towards a maximum instead by moving towards a positive direction
-    delta = 0.00001
-    ''' Lbridge = dimensions[0][0] # initial guess
-    hbridge = dimensions[0][1]*(Lbridge)
-    Lwindow = dimensions[0][2]*(Lbridge)
-    sensitivity = dimensions[1]
-    Wbridge = Lbridge/4'''
+    delta = 200000
     dim0 = np.array(dimensions)
-    Freq0 = freqGuess
-    for i in range(20):
-        g = grad(dim0, delta) 
-        print(delta)
-        dimNext = dim0 + delta*g
-        #print("Grad:", g) #debugging
-        print("The frequency is " + str(Freq0) + " at " + str(dim0))
-        freqNext = getSensitivity(dim0)
-        rel_sens = abs(((Freq0 - freqNext)/Freq0))*100
-        if (freqNext < Freq0):
+    sens0 = sensGuess
+    for i in range(5):
+        last_freq = getFrequency(dim0)
+        g = grad(dim0, delta, sens0) 
+        dimNext = dim0 - delta*g
+        print("Grad:", g) #debugging
+        print(dimNext)
+        freqNext = getFrequency(dimNext)
+        sensNext = abs(((freqNext - last_freq )/last_freq))*100
+        print("The sensitivity is " + str(sensNext) + " at " + str(dim0))
+        print(freqNext)
+        if (sensNext > sens0):
             print("Passed maximum.")
-            return dim0, Freq0
+            return dim0, sens0
         else:
-            dim0, Freq0 = dimNext, freqNext
-    return dim0, Freq0
+            dim0, sens0 = dimNext, sensNext
+    return dim0, sens0
+
+# Define a function to get the frequency based on the dimension and delta
+def get_frequency(dim, delta):
+    # Your implementation to calculate the frequency based on the dimension and delta
+    return getFrequency(dim)
+    
+
+# Define the objective function to minimize the relative frequency
+def objective_function(x):
+    dim, delta = x[:-1], x[-1]  # Separate the dimensions and delta
+    dx = delta+dim[0]
+    dy = delta+dim[1]
+    dz =delta+dim[2]
+    dmat =0
+    last_freq = getFrequency(dim)  # Get the frequency for the current dimensions
+    new_dim = [dx, dy, dz, dmat]  # Update dimensions with delta
+    new_freq = getFrequency(new_dim)  # Get the frequency for the updated dimensions
+
+
+    # Calculate the relative frequency
+    relative_frequency = abs((new_freq - last_freq) / last_freq) * 100
+    #print(f'Dimensions: {dim},New DImensions: {new_dim}, Delta: {delta}, Last Freq: {last_freq}, New Freq: {new_freq}, Relative Frequency: {relative_frequency}')
+    return relative_frequency
+
+
 
 def gridSearch():
     Lbridge = np.linspace(5e-5,0.01,5)
@@ -245,24 +266,30 @@ def gridSearch():
     
     for length in Lbridge:
         for h in hper:
+            last_freq = 0  # Reset last_freq for each h value
             for l in lper:
-                if h*(length) <= 0.001 or h*(length) >= 1e-5:
-                    hbridge = h*length
-                    Lwindow = l*(length)
-                    Wbridge = length/4
-                    #sensivity[getsensevity(Lbridge, Wbridge, hbridge,Lwindow)] = [Lbridge, Wbridge, hbridge,Lwindow]
-                    freq = getSensitivity([length,h,l, mat_th])
+                if h * length <= 0.001 or h * length >= 1e-5:
+                    hbridge = h * length
+                    Lwindow = l * length
+                    Wbridge = length / 4
+                    freq = getFrequency([length, h, l, mat_th])
+
                     if last_freq == 0:
                         last_freq = freq
                     else:
-                        rel_sens = (abs(((last_freq - freq)/last_freq))*100) #Percent of change in relative frequency 
+                        # Percent of change in relative frequency
+                        rel_freq = (abs(((freq -last_freq) / last_freq)) * 100)  
                         last_freq = freq
-                    sensitivity[rel_sens] = [length, h, l, mat_th]
-                    print("The freq is "+ str(rel_sens) + " at " +  str(length) + " m length " + str(Wbridge)+ " m width "+ 
-                          str(hbridge) + " m height " + str(Lwindow) + " m window \n")
+                        sensitivity[rel_freq] = [length, h, l, mat_th]
 
-    max_sens = max(sensitivity.keys())
+                    print("The freq is " + str(rel_freq) + " at " + str(length) + " m length " + str(Wbridge) + " m width " +
+                        str(hbridge) + " m height " + str(Lwindow) + " m window \n")
 
+    max_sens = min(sensitivity.keys())
+    if max_sens <= 0.0002:
+        print("Min val reached")
+        min_val = 1
+    
     print("The maximum sensitivity is "+ str(max_sens)+ "at" + str(sensitivity[max_sens]))
     
     return [sensitivity[max_sens], max_sens]
@@ -274,27 +301,50 @@ def mat_thickness(dimensions, freq, properties):
     lpercent = dimensions[2]
     mat_th = dimensions[3]
     for th in max_mat_thickness:
-        freq = getSensitivity([Lbridge, hpercent, lpercent, th])
+        freq = getFrequency([Lbridge, hpercent, lpercent, th])
         if freq == 0:
             break
         mat_th = th
     return mat_th
 
+def callback(xk, convergence):
+    relative_frequency = objective_function(xk)
+    if 0 < relative_frequency <= 0.0002:
+        return True  # Stop the optimization
+    return False  # Continue the optimization
 def main():
-    max_sens = [[0.01, 0.05, 0.3125, 0],99.50004591047193]
+    max_sens = []
 
     #Initial sweep of all values in ranges with large step sizes
-    max_sens = gridSearch()
+    #max_sens = gridSearch()
 
     #Further scope into a zoomed in section of the maximum value
     max_freq = 0
     print("Starting gradient descent with" + str(max_sens))
     opt_dim = []
-    #opt_dim, max_freq = gradientAscent(max_sens[0], max_sens[1])
+    #freq = last_freq*(max_sens[1]/100)
+    #opt_dim, max_freq = gradientDescent(max_sens[0], (max_sens[1] ))
 
-    #Finding the longevity values for various material aka when it stops working
-   # gold = mat_thickness(opt_dim, max_freq, ) #add material value
-   # molybdenum = mat_thickness(opt_dim, max_freq, ) #add material value
-   # chromium = mat_thickness(opt_dim, max_freq, ) #add material value
-   # SiO2 =  mat_thickness(opt_dim, max_freq, ) #add material value
+
+    #Alternative method of optimization: Evolutionary Algorithm
+    print("Starting differential evolution")
+    bounds = [(5e-5, 0.01), (0.05, 0.2), (0.05, 0.4), (0, 0), (0, 0.00001)]
+
+    # Use differential evolution to find the optimal dimensions and delta
+    result = differential_evolution(objective_function, bounds, maxiter=3, callback=callback)
+
+    # Get the optimal dimensions, delta, and the corresponding relative frequency
+    print(result)
+    optimal_dimensions_and_delta = result.x
+    optimal_relative_frequency = result.fun
+
+    optimal_dimensions = optimal_dimensions_and_delta[:-1]
+    optimal_delta = optimal_dimensions_and_delta[-1]
+
+    print("Optimal dimensions:", optimal_dimensions)
+    print("Optimal delta:", optimal_delta)
+    print("Optimal relative frequency:", optimal_relative_frequency)
+
+
+
 main()
