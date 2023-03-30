@@ -288,6 +288,9 @@ def gridSearch():
                           str(hbridge) + " m height " + str(Lwindow) + " m window \n")
 
     max_sens = min(sensitivity.keys())
+    while max_sens <= 0.0002:
+        sensitivity.pop(max_sens)
+        max_sens = min(sensitivity.keys())
     print("The maximum sensitivity is "+ str(max_sens)+ "at" + str(sensitivity[max_sens]))
     
     return [sensitivity[max_sens], max_sens]
