@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy
 from scipy.optimize import differential_evolution
+class CustomStopException(Exception):
+    pass
 FlexCode = """
 TITLE 
 'DA5'
@@ -167,7 +169,7 @@ FlexFileName = "DA5"
 FlexLocation = "FlexPDE6s"
 FlexVersion = 6
 TextFile = (FlexVersion==7)*("DA5_output/")+'DA5_summary_0.txt'
-last_freq = 0
+max_val = ""
 def getFrequency(dimensions):
     freq = 0
     Lbridge = dimensions[0]
@@ -237,6 +239,7 @@ def get_frequency(dim, delta):
     
 
 # Define the objective function to minimize the relative frequency
+
 def objective_function(x):
     dim, delta = x[:-1], x[-1]  # Separate the dimensions and delta
     dx = delta+dim[0]
@@ -246,17 +249,18 @@ def objective_function(x):
     last_freq = getFrequency(dim)  # Get the frequency for the current dimensions
     new_dim = [dx, dy, dz, dmat]  # Update dimensions with delta
     new_freq = getFrequency(new_dim)  # Get the frequency for the updated dimensions
-
+    threshold = 0.0002
 
     # Calculate the relative frequency
     relative_frequency = abs((new_freq - last_freq) / last_freq) * 100
-    #print(f'Dimensions: {dim},New DImensions: {new_dim}, Delta: {delta}, Last Freq: {last_freq}, New Freq: {new_freq}, Relative Frequency: {relative_frequency}')
+    print(f'Dimensions: {dim},New Dimensions: {new_dim}, Delta: {delta}, Last Freq: {last_freq}, New Freq: {new_freq}, Relative Frequency: {relative_frequency}')
+    
     return relative_frequency
 
 
 
 def gridSearch():
-    Lbridge = np.linspace(5e-5,0.01,5)
+    Lbridge = np.linspace(5e-4,0.01,5)
     hper = np.linspace(0.05,0.2, 4)
     lper = np.linspace(0.05,0.4, 5)
     last_freq = 0
@@ -266,30 +270,24 @@ def gridSearch():
     
     for length in Lbridge:
         for h in hper:
-            last_freq = 0  # Reset last_freq for each h value
+            last_freq = 0
             for l in lper:
-                if h * length <= 0.001 or h * length >= 1e-5:
-                    hbridge = h * length
-                    Lwindow = l * length
-                    Wbridge = length / 4
-                    freq = getFrequency([length, h, l, mat_th])
-
+                if h*(length) <= 0.001 or h*(length) >= 1e-5:
+                    hbridge = h*length
+                    Lwindow = l*(length)
+                    Wbridge = length/4
+                    #sensivity[getsensevity(Lbridge, Wbridge, hbridge,Lwindow)] = [Lbridge, Wbridge, hbridge,Lwindow]
+                    freq = getFrequency([length,h,l, mat_th])
                     if last_freq == 0:
                         last_freq = freq
                     else:
-                        # Percent of change in relative frequency
-                        rel_freq = (abs(((freq -last_freq) / last_freq)) * 100)  
+                        rel_sens = (abs(((last_freq - freq)/last_freq))*100) #Percent of change in relative frequency 
                         last_freq = freq
-                        sensitivity[rel_freq] = [length, h, l, mat_th]
-
-                    print("The freq is " + str(rel_freq) + " at " + str(length) + " m length " + str(Wbridge) + " m width " +
-                        str(hbridge) + " m height " + str(Lwindow) + " m window \n")
+                    sensitivity[rel_sens] = [length, h, l, mat_th]
+                    print("The sensitivity is "+ str(rel_sens) + " at " +  str(length) + " m length " + str(Wbridge)+ " m width "+ 
+                          str(hbridge) + " m height " + str(Lwindow) + " m window \n")
 
     max_sens = min(sensitivity.keys())
-    if max_sens <= 0.0002:
-        print("Min val reached")
-        min_val = 1
-    
     print("The maximum sensitivity is "+ str(max_sens)+ "at" + str(sensitivity[max_sens]))
     
     return [sensitivity[max_sens], max_sens]
@@ -316,7 +314,7 @@ def main():
     max_sens = []
 
     #Initial sweep of all values in ranges with large step sizes
-    #max_sens = gridSearch()
+    max_sens = gridSearch()
 
     #Further scope into a zoomed in section of the maximum value
     max_freq = 0
@@ -328,10 +326,10 @@ def main():
 
     #Alternative method of optimization: Evolutionary Algorithm
     print("Starting differential evolution")
-    bounds = [(5e-5, 0.01), (0.05, 0.2), (0.05, 0.4), (0, 0), (0, 0.00001)]
+    bounds = [(5e-4, 0.01), (0.05, 0.2), (0.05, 0.4), (0, 0), (0, 0.00001)]
 
     # Use differential evolution to find the optimal dimensions and delta
-    result = differential_evolution(objective_function, bounds, maxiter=3, callback=callback)
+    result = differential_evolution(objective_function, bounds, maxiter=1, callback=callback, disp=True)
 
     # Get the optimal dimensions, delta, and the corresponding relative frequency
     print(result)
@@ -344,7 +342,5 @@ def main():
     print("Optimal dimensions:", optimal_dimensions)
     print("Optimal delta:", optimal_delta)
     print("Optimal relative frequency:", optimal_relative_frequency)
-
-
 
 main()
