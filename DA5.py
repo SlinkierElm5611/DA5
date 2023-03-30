@@ -235,7 +235,7 @@ def gradientAscent(dimensions, freqGuess):
     return dim0, Freq0
 
 def gridSearch():
-    Lbridge = np.linspace(5e-5,0.01,10)
+    Lbridge = np.linspace(5e-5,0.01,5)
     hper = np.linspace(0.05,0.2, 4)
     lper = np.linspace(0.05,0.4, 5)
     last_freq = 0
@@ -256,6 +256,7 @@ def gridSearch():
                         last_freq = freq
                     else:
                         rel_sens = (abs(((last_freq - freq)/last_freq))*100) #Percent of change in relative frequency 
+                        last_freq = freq
                     sensitivity[rel_sens] = [length, h, l, mat_th]
                     print("The freq is "+ str(rel_sens) + " at " +  str(length) + " m length " + str(Wbridge)+ " m width "+ 
                           str(hbridge) + " m height " + str(Lwindow) + " m window \n")
@@ -264,7 +265,7 @@ def gridSearch():
 
     print("The maximum sensitivity is "+ str(max_sens)+ "at" + str(sensitivity[max_sens]))
     
-    return [sensitivity[max_sens], max_sens, max()]
+    return [sensitivity[max_sens], max_sens]
 
 def mat_thickness(dimensions, freq, properties):
     max_mat_thickness = np.linspace(0, 2e-5, 20) #guess for max material change
